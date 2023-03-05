@@ -1,6 +1,8 @@
+use std::array;
 use std::fmt::Error;
 use std::fs::{self, DirEntry};
 use std::io::{self, stdin};
+use std::ops::Deref;
 use std::path::Path;
 
 fn parse_dir_entry(entry: &DirEntry) -> Result<Password, Error> {
@@ -51,7 +53,7 @@ struct Password {
     _relative_path: String,
     absolute_path: String,
 }
-const DEFAULT_PATH: &str = "/home/wholteza/.password-store";
+const DEFAULT_PATH: &str = "C:\\Users\\wholteza\\password-store";
 fn main() {
     // get dir
 
@@ -95,15 +97,25 @@ fn main() {
         .expect("A search string was not provided");
 
     // find file
-    let found_password = passwords
-        .iter()
-        .find(|&p| p.absolute_path.contains(&search_input[..]));
+    // let found_password = passwords
+    //     .iter()
+    //     .find(|&p| (p.absolute_path.deref()).contains(&search_input));
 
-    if found_password.is_none() {
-        println!("Sorry but i cannot find that password");
-        return;
+    for pass in passwords {
+        let b = search_input.to_ascii_uppercase();
+        let a = pass.name.to_ascii_uppercase();
+        println!("############################## {}, {}", a, b);
+        let is_match = a.find(&b);
+        if is_match.is_some() {
+            println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! {}", a)
+        }
     }
 
+    // if found_password.is_none() {
+    //     println!("Sorry but i cannot find that password");
+    //     return;
+    // }
+
     // print file path or smth
-    println!("Found password: {}", found_password.expect("never").name);
+    // println!("Found password: {}", found_password.expect("never").name);
 }
