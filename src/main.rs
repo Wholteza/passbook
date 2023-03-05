@@ -94,11 +94,10 @@ fn main() {
         .read_line(&mut search_input)
         .expect("A search string was not provided");
 
-    let x: &str = format!("{}", search_input);
-    println!("{}", x);
-
     // find file
-    let found_password = passwords.iter().find(|&p| p.absolute_path.contains(&x));
+    let found_password = passwords
+        .iter()
+        .find(|&p| p.absolute_path.contains(&search_input[..]));
 
     if found_password.is_none() {
         println!("Sorry but i cannot find that password");
