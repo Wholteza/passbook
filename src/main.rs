@@ -16,7 +16,7 @@ fn parse_dir_entry(entry: &DirEntry) -> Result<Password, Error> {
 
     let relative_path: String = String::from(
         absolute_path
-            .get(default_path.len().into()..)
+            .get(DEFAULT_PATH.len().into()..)
             .expect("Error"),
     );
     // put in structure
@@ -24,7 +24,7 @@ fn parse_dir_entry(entry: &DirEntry) -> Result<Password, Error> {
     let password = Password {
         name,
         absolute_path,
-        relative_path,
+        _relative_path: relative_path,
     };
 
     return Ok(password);
@@ -48,10 +48,10 @@ fn extract_passwords(dir: &Path, passwords: &mut Vec<Password>) -> io::Result<()
 #[derive(Clone)]
 struct Password {
     name: String,
-    relative_path: String,
+    _relative_path: String,
     absolute_path: String,
 }
-const default_path: &str = "C:\\Users\\wholteza\\password-store";
+const DEFAULT_PATH: &str = "/home/wholteza/.password-store";
 fn main() {
     // get dir
 
@@ -59,9 +59,9 @@ fn main() {
 
     let mut buffer: String = String::new();
 
-    stdin().read_line(&mut buffer);
+    _ = stdin().read_line(&mut buffer);
     let directory_path: &str = match buffer.trim_end() {
-        "" => default_path.into(),
+        "" => DEFAULT_PATH.into(),
         name => name.into(),
     };
     println!("{directory_path}");
@@ -75,7 +75,7 @@ fn main() {
     println!("That is a directory!");
 
     let mut passwords: Vec<Password> = vec![];
-    extract_passwords(path, &mut passwords);
+    _ = extract_passwords(path, &mut passwords);
 
     // print to screen
     // for password in passwords {
@@ -94,12 +94,11 @@ fn main() {
         .read_line(&mut search_input)
         .expect("A search string was not provided");
 
-    println!("{}", &search_input);
+    let x: &str = format!("{}", search_input);
+    println!("{}", x);
 
     // find file
-    let found_password = passwords
-        .into_iter()
-        .find(|p| p.absolute_path.contains(&search_input));
+    let found_password = passwords.iter().find(|&p| p.absolute_path.contains(&x));
 
     if found_password.is_none() {
         println!("Sorry but i cannot find that password");
