@@ -1,13 +1,15 @@
 # passbook
 
-Graphical interface for the unix password manager.
+pass like password manager
 
-## todo:
+# Getting started
 
-- Define directory
-- inventory all files
-- inventory file paths
-- search for a file, display the file path just to make sure it's working
+## Requirements Ubuntu
+
+- `sudo apt install build-essential libgpgme-dev`
+
+## Todo:
+
 - hook into gpg and use it to decrypt the file, show password
 - put password in clipboard
 - clear clipboard after interval
