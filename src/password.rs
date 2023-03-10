@@ -1,11 +1,8 @@
 use gpgme::{Context, Protocol};
+use std::fs::File;
+use std::io;
 use std::path::Path;
 use std::process::exit;
-use std::vec;
-use std::{
-    fs::File,
-    io::{self, prelude::*},
-};
 use std::{
     fs::{self, DirEntry},
     io::Error,
@@ -43,7 +40,7 @@ pub fn into_password(pass: &PasswordFile) -> io::Result<Password> {
 
     let password = match String::from_utf8(output) {
         Ok(password) => password,
-        Err(err) => {
+        Err(_) => {
             println!("Could not parse contents of file");
             exit(1);
         }

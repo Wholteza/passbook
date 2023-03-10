@@ -29,13 +29,19 @@ fn main() {
         .iter()
         .find(|&p| (p.relative_path.as_str()).contains(search_input.trim()));
 
-    let password_file = match found_password_file {
+    let password = match found_password_file {
+        Some(password_file) => match into_password(password_file) {
+            Ok(password) => password,
+            Err(_) => {
+                println!("Sorry but i cannot decrypt that password");
+                exit(1)
+            }
+        },
         None => {
             println!("Sorry but i cannot find that password");
             exit(1)
         }
-        Some(password_file) => into_password(password_file),
     };
 
-    let password = into_password(password_file);
+    println!("{}", password.password)
 }
