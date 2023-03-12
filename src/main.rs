@@ -1,23 +1,20 @@
 use std::io::stdin;
-use std::path::Path;
 use std::process::exit;
 
-use crate::constants::DEFAULT_PATH;
-use crate::password::{extract_passwords_files, into_password};
+use crate::environment::get_variables;
+use crate::password::{get_password_files, into_password};
 
 mod constants;
+mod environment;
 mod password;
 
 fn main() {
-    let path = Path::new(DEFAULT_PATH);
-    if !path.is_dir() {
-        println!("That is not a directory");
-        return;
-    }
-    println!("That is a directory!");
+    let environment_variables =
+        get_variables().expect("Could not get all required configuration parameters");
 
-    let mut passwords = vec![];
-    _ = extract_passwords_files(path, &mut passwords);
+    let mut password_files = vec![];
+    get_password_files(&environment_variables.root_directory, &mut password_files)
+        .expect("Unable to detect password files");
 
     println!("What password are you looking for?");
     let mut search_input = String::new();
@@ -25,7 +22,7 @@ fn main() {
         .read_line(&mut search_input)
         .expect("A search string was not provided");
 
-    let found_password_file = passwords
+    let found_password_file = password_files
         .iter()
         .find(|&p| (p.relative_path.as_str()).contains(search_input.trim()));
 
@@ -43,5 +40,15 @@ fn main() {
         }
     };
 
-    println!("{}", password.password)
+    // copy_to_clipboard(&password.password);
+
+    println!("{}", &password.password);
 }
+
+// fn copy_to_clipboard(text: &str) {
+//     let mut clipboard = Clipboard::new().expect("err");
+//     clipboard.set_text(text).unwrap();
+//     // Workaround for text not being sent to clipboard on kubuntu 22.04
+//     sleep(Duration::from_millis(10));
+//     println!("gpg output: {}", b)
+// }

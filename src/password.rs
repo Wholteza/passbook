@@ -74,7 +74,7 @@ fn into_password_file(entry: &DirEntry) -> Result<PasswordFile, Error> {
     return Ok(password);
 }
 
-pub fn extract_passwords_files(dir: &Path, passwords: &mut Vec<PasswordFile>) -> io::Result<()> {
+fn extract_passwords_files(dir: &Path, passwords: &mut Vec<PasswordFile>) -> io::Result<()> {
     if dir.is_dir() {
         let name = match dir.file_name() {
             Some(file_name) => match file_name.to_str() {
@@ -109,4 +109,22 @@ pub fn extract_passwords_files(dir: &Path, passwords: &mut Vec<PasswordFile>) ->
         }
     }
     Ok(())
+}
+
+pub fn get_password_files(
+    path: &str,
+    password_files_buffer: &mut Vec<PasswordFile>,
+) -> Result<(), Error> {
+    let path = Path::new(path);
+    if !path.is_dir() {
+        return Err(Error::new(
+            io::ErrorKind::InvalidInput,
+            "Path provided is not a directory",
+        ));
+    }
+
+    match extract_passwords_files(path, password_files_buffer) {
+        Ok(_) => return Ok(()),
+        Err(err) => return Err(err),
+    }
 }
