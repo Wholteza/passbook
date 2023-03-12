@@ -1,14 +1,12 @@
-use gpgme::{Context, Protocol};
-use std::fs::File;
 use std::io;
 use std::path::Path;
-use std::process::exit;
+
 use std::{
     fs::{self, DirEntry},
     io::Error,
 };
 
-use crate::constants::DEFAULT_PATH;
+use crate::{environment, gpg};
 
 #[derive(Clone)]
 pub struct PasswordFile {
@@ -20,36 +18,55 @@ pub struct PasswordFile {
 #[derive(Clone)]
 pub struct Password {
     pub password: String,
+    pub raw_totp: String,
+    pub rest: String,
 }
 
 pub fn into_password(pass: &PasswordFile) -> io::Result<Password> {
-    let proto = Protocol::OpenPgp;
-    let mut ctx = Context::from_protocol(proto)?;
-    let mut input = File::open(&pass.absolute_path)?;
-    let mut output = Vec::new();
-    match ctx
-        .decrypt(&mut input, &mut output)
-        .map_err(|e| format!("decrypting failed: {:?}", e))
-    {
-        Ok(_) => println!("ok"),
-        Err(_) => {
-            println!("no");
-            exit(1);
-        }
-    };
+    let environment_variables =
+        environment::get_variables().expect("Could not read environment variables");
 
-    let password = match String::from_utf8(output) {
-        Ok(password) => password,
-        Err(_) => {
-            println!("Could not parse contents of file");
-            exit(1);
-        }
-    };
+    let raw_decrypted_output = gpg::decrypt(&pass.absolute_path, &environment_variables.gpg_path)
+        .expect("Could not decrypt file");
 
-    Ok(Password { password })
+    let mut password = String::new();
+    let mut raw_totp = String::new();
+    let mut rest = String::new();
+
+    let splits = raw_decrypted_output.split('\n');
+    let mut is_first_row = true;
+    for split in splits {
+        if is_first_row {
+            password.push_str(split);
+            is_first_row = false;
+            continue;
+        }
+        if split.contains("otpauth://") {
+            raw_totp.push_str(split);
+            continue;
+        }
+        rest.push_str(split);
+        rest.push_str("\n");
+    }
+
+    if password.is_empty() {
+        return Err(std::io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "File did not contain a password",
+        ));
+    }
+
+    Ok(Password {
+        password,
+        raw_totp,
+        rest,
+    })
 }
 
 fn into_password_file(entry: &DirEntry) -> Result<PasswordFile, Error> {
+    let environment_variables =
+        environment::get_variables().expect("Could not read environment variables");
+
     let name = match entry.file_name().to_str() {
         Some(st) => st.into(),
         None => String::new(),
@@ -60,10 +77,11 @@ fn into_password_file(entry: &DirEntry) -> Result<PasswordFile, Error> {
         None => String::new(),
     };
 
-    let relative_path = match absolute_path.get(DEFAULT_PATH.len().into()..) {
-        Some(path) => String::from(path),
-        None => String::new(),
-    };
+    let relative_path =
+        match absolute_path.get((&environment_variables.root_directory).len().into()..) {
+            Some(path) => String::from(path),
+            None => String::new(),
+        };
 
     let password = PasswordFile {
         name,

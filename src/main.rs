@@ -4,8 +4,8 @@ use std::process::exit;
 use crate::environment::get_variables;
 use crate::password::{get_password_files, into_password};
 
-mod constants;
 mod environment;
+mod gpg;
 mod password;
 
 fn main() {

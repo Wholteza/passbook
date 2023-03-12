@@ -5,6 +5,7 @@ const DEFAULT_UNIX_PATH: &str = "~/.password-store";
 
 pub struct Variables {
     pub root_directory: String,
+    pub gpg_path: String,
 }
 pub fn get_variables() -> Result<Variables, Error> {
     let root_directory = match env::var("PASSBOOK_ROOT_DIRECTORY") {
@@ -27,6 +28,11 @@ pub fn get_variables() -> Result<Variables, Error> {
             ))
         }
     };
-    println!("{root_directory}");
-    return Ok(Variables { root_directory });
+
+    let gpg_path = env::var("PASSBOOK_GPG_PATH").expect("PASSBOOK_GPG_PATH not specified");
+
+    return Ok(Variables {
+        root_directory,
+        gpg_path,
+    });
 }
