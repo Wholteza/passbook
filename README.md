@@ -6,7 +6,7 @@ pass like password manager
 
 ## Requirements Ubuntu
 
-- `sudo apt install build-essential libgpgme-dev xorg-dev`
+- `sudo apt install build-essential xorg-dev`
 
 ## Requirements Windows
 
