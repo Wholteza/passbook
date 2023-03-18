@@ -41,6 +41,7 @@ const PADDING_MIN_LENGTH: usize = 9;
 const BLOCK_BYTE_SIZE: usize = 64;
 const PADDING_END_BYTE_SIZE: usize = 8;
 const PADDING_START_BYTE_SIZE: usize = 1;
+const MESSAGE_MAX_LENGTH_IN_BYTES: usize = (u64::MAX / 8) as usize;
 
 #[cfg(test)]
 mod tests {
@@ -63,16 +64,15 @@ mod tests {
         assert!(padding_length > BLOCK_BYTE_SIZE)
     }
 
-    // #[test]
-    // fn applied_padding_results_in_n_times_blocksize_length() {
-    //     for index in 0..(BLOCK_BYTE_SIZE * 10) {
-    //         const PADDING_LENGTH_IN_BYTES: usize = BLOCK_BYTE_SIZE - 1;
-    //         let input = vec![0xFF; index];
-    //         let padded_input = apply_padding(&input, PADDING_LENGTH_IN_BYTES);
-    //         let padded_input_length = padded_input.len();
-    //         assert_eq!(padded_input_length % BLOCK_BYTE_SIZE, 0);
-    //     }
-    // }
+    #[test]
+    fn padded_message_is_always_a_multiple_of_512() {
+        for index in 1..(BLOCK_BYTE_SIZE * 10) {
+            let input = vec![0xFF; index];
+            let padded_input = apply_padding(&input);
+            let padded_input_length = padded_input.len();
+            assert_eq!(padded_input_length % BLOCK_BYTE_SIZE, 0);
+        }
+    }
 }
 
 // pub fn sha_1(input: &[u8]) {
@@ -106,26 +106,36 @@ pub fn calculate_padding_length_in_bytes(input_length: usize) -> usize {
     }
 }
 
-pub fn apply_padding(input: &Vec<u8>, padding_length_in_bytes: usize) -> Vec<u8> {
+pub fn apply_padding(input: &Vec<u8>) -> Vec<u8> {
+    let original_length: u64 = input.len().try_into().expect("error");
     let mut buf = vec![];
-    for word in input {
-        buf.push(word.to_owned());
+
+    for byte in input {
+        buf.push(byte.to_owned());
     }
 
+    // Push start of padding
     buf.push(0x80);
 
-    let bytes_of_zeros_to_apply =
-        padding_length_in_bytes - (PADDING_END_BYTE_SIZE + PADDING_START_BYTE_SIZE);
-    for _ in 0..bytes_of_zeros_to_apply {
-        buf.push(0x00)
+    // Push the padding itself
+    while (buf.len() + PADDING_END_BYTE_SIZE) % BLOCK_BYTE_SIZE != 0 {
+        buf.push(0x00);
     }
 
-    // append "u64 length"
-    let len = u64::try_from(input.len()).expect("error");
-    for byte in len.to_be_bytes() {
+    // Push the end of the padding
+    let (low, high) = split_u64_to_u32(original_length);
+    for byte in [low.to_be_bytes(), high.to_be_bytes()].concat() {
         buf.push(byte);
     }
+    if (original_length == 56) {
+        println!("arst");
+    }
+
     buf
+}
+
+pub fn split_u64_to_u32(int: u64) -> (u32, u32) {
+    (int as u32, (int >> 32) as u32)
 }
 
 // pub fn process_m(block: &[u32], mut h0: u32, mut h1: u32, mut h2: u32, mut h3: u32, mut h4: u32) {
