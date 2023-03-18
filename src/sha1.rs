@@ -34,83 +34,60 @@
 // (40 <= t <= 59) K(t) = 0x8F1BBCDC
 // (60 <= t <= 79) K(t) = 0xCA62C1D6
 
-use std::array;
+use std::{array, io::Read};
 
 // Method 1
-const PADDING_MIN_LENGTH: usize = 9;
-const BLOCK_BYTE_SIZE: usize = 64;
-const PADDING_END_BYTE_SIZE: usize = 8;
-const PADDING_START_BYTE_SIZE: usize = 1;
-const MESSAGE_MAX_LENGTH_IN_BYTES: usize = (u64::MAX / 8) as usize;
+const PADDING_MIN_LENGTH_IN_BYTES: usize = 9;
+const BLOCK_SIZE_IN_BYTES: usize = 64;
+const PADDING_END_SIZE_IN_BYTES: usize = 8;
+const PADDING_START_SIZE_IN_BYTES: usize = 1;
+const MESSAGE_MAX_LENGTH_IN_BYTES: usize = u64::MAX as usize / 8;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn padding_is_not_needed() {
-        assert_eq!(calculate_padding_length_in_bytes(BLOCK_BYTE_SIZE), 0)
-    }
-    #[test]
-    fn less_than_block_size_padding_is_needed() {
-        const LENGTH: usize = BLOCK_BYTE_SIZE - PADDING_MIN_LENGTH;
-        let padding_length = calculate_padding_length_in_bytes(LENGTH);
-        assert!(padding_length < BLOCK_BYTE_SIZE)
-    }
-    #[test]
-    fn more_than_block_size_padding_is_needed() {
-        const LENGTH: usize = BLOCK_BYTE_SIZE - PADDING_MIN_LENGTH + 1;
-        let padding_length = calculate_padding_length_in_bytes(LENGTH);
-        assert!(padding_length > BLOCK_BYTE_SIZE)
-    }
-
-    #[test]
-    fn padded_message_is_always_a_multiple_of_512() {
-        for index in 1..(BLOCK_BYTE_SIZE * 10) {
+    fn padded_message_is_always_a_multiple_of_64() {
+        for index in 1..(BLOCK_SIZE_IN_BYTES * 100) {
             let input = vec![0xFF; index];
             let padded_input = apply_padding(&input);
             let padded_input_length = padded_input.len();
-            assert_eq!(padded_input_length % BLOCK_BYTE_SIZE, 0);
+            assert_eq!(padded_input_length % BLOCK_SIZE_IN_BYTES, 0);
+        }
+    }
+
+    #[test]
+    fn padded_message_can_be_parsed_into_blocks_of_words() {
+        let message = apply_padding(&vec![0xFF; 10]);
+        let blocks = into_blocks(&message);
+        assert_eq!(blocks.len(), message.len() / BLOCK_SIZE_IN_BYTES);
+        for words in blocks {
+            assert_eq!(words.len(), 16)
         }
     }
 }
 
-// pub fn sha_1(input: &[u8]) {
-//     let mut h0: u32 = 0x67452301;
-//     let mut h1: u32 = 0xEFCDAB89;
-//     let mut h2: u32 = 0x98BADCFE;
-//     let mut h3: u32 = 0x10325476;
-//     let mut h4: u32 = 0xC3D2E1F0;
+pub fn sha_1(message: &Vec<u8>) {
+    let mut h0: u32 = 0x67452301;
+    let mut h1: u32 = 0xEFCDAB89;
+    let mut h2: u32 = 0x98BADCFE;
+    let mut h3: u32 = 0x10325476;
+    let mut h4: u32 = 0xC3D2E1F0;
 
-//     let padding_length = calculate_padding_length_in_bytes(input.len());
-//     let needs_padding = padding_length != 0;
+    let message = apply_padding(message);
+    let blocks = into_blocks(&message);
 
-//     let input = match needs_padding {
-//       false => input,
-//       true => apply_padding(input, padding_length)
-//     };
-
-//    // start unit testing step by step
-
-// }
-
-pub fn calculate_padding_length_in_bytes(input_length: usize) -> usize {
-    match (input_length) % BLOCK_BYTE_SIZE {
-        0 => 0,
-        bytes_populated_in_last_block => {
-            match (BLOCK_BYTE_SIZE - bytes_populated_in_last_block) < PADDING_MIN_LENGTH {
-                true => (BLOCK_BYTE_SIZE * 2) - bytes_populated_in_last_block,
-                false => BLOCK_BYTE_SIZE - bytes_populated_in_last_block,
-            }
-        }
+    for mut block in blocks {
+        process_block(&mut block, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4);
     }
 }
 
-pub fn apply_padding(input: &Vec<u8>) -> Vec<u8> {
-    let original_length: u64 = input.len().try_into().expect("error");
+pub fn apply_padding(message: &Vec<u8>) -> Vec<u8> {
+    let original_length: u64 = message.len().try_into().expect("error");
     let mut buf = vec![];
 
-    for byte in input {
+    for byte in message {
         buf.push(byte.to_owned());
     }
 
@@ -118,7 +95,7 @@ pub fn apply_padding(input: &Vec<u8>) -> Vec<u8> {
     buf.push(0x80);
 
     // Push the padding itself
-    while (buf.len() + PADDING_END_BYTE_SIZE) % BLOCK_BYTE_SIZE != 0 {
+    while (buf.len() + PADDING_END_SIZE_IN_BYTES) % BLOCK_SIZE_IN_BYTES != 0 {
         buf.push(0x00);
     }
 
@@ -126,9 +103,6 @@ pub fn apply_padding(input: &Vec<u8>) -> Vec<u8> {
     let (low, high) = split_u64_to_u32(original_length);
     for byte in [low.to_be_bytes(), high.to_be_bytes()].concat() {
         buf.push(byte);
-    }
-    if (original_length == 56) {
-        println!("arst");
     }
 
     buf
@@ -138,6 +112,75 @@ pub fn split_u64_to_u32(int: u64) -> (u32, u32) {
     (int as u32, (int >> 32) as u32)
 }
 
-// pub fn process_m(block: &[u32], mut h0: u32, mut h1: u32, mut h2: u32, mut h3: u32, mut h4: u32) {
-//   let words = block.sp
-// }
+pub fn u8_array_to_u32(bytes: &[u8]) -> u32 {
+    assert_eq!(bytes.len(), 4);
+    u32::from_be_bytes(bytes.try_into().expect("nope"))
+}
+
+pub fn into_blocks(message: &Vec<u8>) -> Vec<Vec<u32>> {
+    let words: Vec<u32> = message
+        .chunks(4)
+        .map(|chunk| u8_array_to_u32(chunk))
+        .collect();
+    let blocks: Vec<Vec<u32>> = words.chunks(16).map(|int| int.to_owned()).collect();
+    blocks
+}
+
+pub fn process_block(
+    w: &mut Vec<u32>,
+    h0: &mut u32,
+    h1: &mut u32,
+    h2: &mut u32,
+    h3: &mut u32,
+    h4: &mut u32,
+) {
+    for t in 16..80 {
+        w[t] = (w[t - 3] ^ w[t - 8] ^ w[t - 14] ^ w[t - 16]).rotate_left(1);
+    }
+
+    let mut a: u32 = h0.to_owned();
+    let mut b: u32 = h2.to_owned();
+    let mut c: u32 = h2.to_owned();
+    let mut d: u32 = h3.to_owned();
+    let mut e: u32 = h4.to_owned();
+
+    for t in 0..80 {
+        let temp = a
+            .rotate_left(5)
+            .wrapping_add(f(t, &b, &c, &d))
+            .wrapping_add(e)
+            .wrapping_add(w[t])
+            .wrapping_add(k(t));
+        e = d;
+        d = c;
+        c = b.rotate_left(30);
+        b = a;
+        a = temp;
+    }
+
+    h0 = h0.wrapping_add(a);
+    h1.wrapping_add(b);
+    h2.wrapping_add(c);
+    h3.wrapping_add(d);
+    h4.wrapping_add(e);
+}
+
+pub fn f(t: usize, b: &u32, c: &u32, d: &u32) -> u32 {
+    match t {
+        0..=19 => (b & d) | ((!b) & d),
+        20..=39 => b ^ c ^ d,
+        30..=59 => (b & c) | (b & d) | (c & d),
+        60..=79 => b ^ c ^ d,
+        _ => panic!(),
+    }
+}
+
+pub fn k(t: usize) -> u32 {
+    match t {
+        0..=19 => 0x5A827999,
+        20..=39 => 0x6ED9EBA1,
+        30..=59 => 0x8F1BBCDC,
+        60..=79 => 0xCA62C1D6,
+        _ => panic!(),
+    }
+}
