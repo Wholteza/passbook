@@ -1,40 +1,7 @@
-// Implemented followin rfc3174
+// Implemented following rfc3174
 // https://datatracker.ietf.org/doc/html/rfc3174#section-6.1
 
-// hex digit = 4 bit string
-// word = 32 bit string, unsigned 32 bit integer in hex formatting really
-// if z = u64, z can represent a pair of x and y if x and y are both u32 respectivly
-//// hex value of least significance is to the right
-// block = 512 bit string, and can be represented as a sequence of 16 words
-
-// & bitwise and
-// | bitwise or
-// ^ bitwise xor
-// ! bitwise complement
-
-// << left shift
-// >> right shift
-
-// We add padding if the message length, which is the number of bytes, is not n * 512.
-// padding is added by a "1" followed by m amount of "0"s followed by a 64 bit integer appended at the end
-// the padding produces a message length of 512 * n which can then be processed as sha-1 as part of a 512 bit block
-// the 64 bit integer must represent the original message lenght.
-
-// Functions
-// Each function f(t); where 0 <= t <= 79; operates on 3 words and produces one word as output
-// ( 0 <= t <= 19) f(t;B;C;D) = (B & D) | ((!B) & D)
-// (20 <= t <= 39) f(t;B;C;D) = B ^ C ^ D
-// (40 <= t <= 59) f(t;B;C;D) = (B & C) | (B & D) | (C & D)
-// (60 <= t <= 79) f(t;B;C;D) = (B & D) | ((!B) & D)
-
-// constant words
-// for K(t); where 0 <= t <= 79;
-// ( 0 <= t <= 19) K(t) = 0x5A827999
-// (20 <= t <= 39) K(t) = 0x6ED9EBA1
-// (40 <= t <= 59) K(t) = 0x8F1BBCDC
-// (60 <= t <= 79) K(t) = 0xCA62C1D6
-
-use std::{array, io::Read};
+use std::{array, io::Read, string};
 
 // Method 1
 const PADDING_MIN_LENGTH_IN_BYTES: usize = 9;
@@ -66,6 +33,36 @@ mod tests {
             assert_eq!(words.len(), 16)
         }
     }
+
+    #[test]
+    fn decimals_are_converted_to_hex() {
+        let decimal: u32 = 255;
+        let hexadecimal = to_hex(decimal);
+        assert_eq!(hexadecimal, "FF");
+
+        let decimal: u32 = 16;
+        let hexadecimal = to_hex(decimal);
+        assert_eq!(hexadecimal, "10");
+
+        let decimal: u32 = 128;
+        let hexadecimal = to_hex(decimal);
+        assert_eq!(hexadecimal, "80");
+    }
+
+    #[test]
+    fn hexadecimals_less_than_16_are_padded_with_zero() {
+        let decimal: u32 = 0;
+        let hexadecimal = to_hex(decimal);
+        assert_eq!(hexadecimal, "00");
+
+        let decimal: u32 = 8;
+        let hexadecimal = to_hex(decimal);
+        assert_eq!(hexadecimal, "08");
+
+        let decimal: u32 = 15;
+        let hexadecimal = to_hex(decimal);
+        assert_eq!(hexadecimal, "0F");
+    }
 }
 
 pub fn sha_1(message: &Vec<u8>) {
@@ -78,9 +75,64 @@ pub fn sha_1(message: &Vec<u8>) {
     let message = apply_padding(message);
     let blocks = into_blocks(&message);
 
-    for mut block in blocks {
-        process_block(&mut block, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4);
+    for mut words in blocks {
+        for t in 16..80 {
+            words[t] = (words[t - 3] ^ words[t - 8] ^ words[t - 14] ^ words[t - 16]).rotate_left(1);
+        }
+
+        let mut a: u32 = h0.to_owned();
+        let mut b: u32 = h2.to_owned();
+        let mut c: u32 = h2.to_owned();
+        let mut d: u32 = h3.to_owned();
+        let mut e: u32 = h4.to_owned();
+
+        for t in 0..80 {
+            let temp = a
+                .rotate_left(5)
+                .wrapping_add(operation(t, &b, &c, &d))
+                .wrapping_add(e)
+                .wrapping_add(words[t])
+                .wrapping_add(constant(t));
+            e = d;
+            d = c;
+            c = b.rotate_left(30);
+            b = a;
+            a = temp;
+        }
+
+        h0 = h0.wrapping_add(a);
+        h1 = h1.wrapping_add(b);
+        h2 = h2.wrapping_add(c);
+        h3 = h3.wrapping_add(d);
+        h4 = h4.wrapping_add(e);
     }
+}
+
+fn to_hex(int: u32) -> String {
+    let hex_chars = [
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+    ];
+    let mut input = int;
+    let mut hex_string = String::new();
+    if input < 16 {
+        let mut string = String::from(hex_chars[(input) as usize]);
+        string.insert(0, '0');
+        return string;
+    }
+    loop {
+        let rest = (input % 16) as usize;
+        input = input / 16;
+        hex_string.insert(0, hex_chars[rest]);
+        if input < 16 {
+            hex_string.insert(0, hex_chars[(input) as usize]);
+            break;
+        }
+    }
+    if hex_string.len() == 1 {
+        hex_string.insert(0, '0');
+    }
+
+    hex_string
 }
 
 pub fn apply_padding(message: &Vec<u8>) -> Vec<u8> {
@@ -126,46 +178,7 @@ pub fn into_blocks(message: &Vec<u8>) -> Vec<Vec<u32>> {
     blocks
 }
 
-pub fn process_block(
-    w: &mut Vec<u32>,
-    h0: &mut u32,
-    h1: &mut u32,
-    h2: &mut u32,
-    h3: &mut u32,
-    h4: &mut u32,
-) {
-    for t in 16..80 {
-        w[t] = (w[t - 3] ^ w[t - 8] ^ w[t - 14] ^ w[t - 16]).rotate_left(1);
-    }
-
-    let mut a: u32 = h0.to_owned();
-    let mut b: u32 = h2.to_owned();
-    let mut c: u32 = h2.to_owned();
-    let mut d: u32 = h3.to_owned();
-    let mut e: u32 = h4.to_owned();
-
-    for t in 0..80 {
-        let temp = a
-            .rotate_left(5)
-            .wrapping_add(f(t, &b, &c, &d))
-            .wrapping_add(e)
-            .wrapping_add(w[t])
-            .wrapping_add(k(t));
-        e = d;
-        d = c;
-        c = b.rotate_left(30);
-        b = a;
-        a = temp;
-    }
-
-    h0 = h0.wrapping_add(a);
-    h1.wrapping_add(b);
-    h2.wrapping_add(c);
-    h3.wrapping_add(d);
-    h4.wrapping_add(e);
-}
-
-pub fn f(t: usize, b: &u32, c: &u32, d: &u32) -> u32 {
+pub fn operation(t: usize, b: &u32, c: &u32, d: &u32) -> u32 {
     match t {
         0..=19 => (b & d) | ((!b) & d),
         20..=39 => b ^ c ^ d,
@@ -175,7 +188,7 @@ pub fn f(t: usize, b: &u32, c: &u32, d: &u32) -> u32 {
     }
 }
 
-pub fn k(t: usize) -> u32 {
+pub fn constant(t: usize) -> u32 {
     match t {
         0..=19 => 0x5A827999,
         20..=39 => 0x6ED9EBA1,
