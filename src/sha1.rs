@@ -25,6 +25,31 @@ mod tests {
     }
 
     #[test]
+    fn last_64_bits_of_padded_message_contains_length_of_original_message() {
+        for index in 1..(BLOCK_SIZE_IN_BYTES * 100) {
+            let input = vec![0xFF; index];
+            let input_len_bits = input.len() * 8;
+            let padded_input = apply_padding(&input);
+            let chunks: Vec<Vec<u8>> = padded_input.chunks(8).map(|i| i.to_owned()).collect();
+            let mut x = [0u8; 8];
+            let mut last_chunk = chunks[chunks.len() - 1].to_vec();
+            for i in 0..8 {
+                x[i] = last_chunk[i]
+            }
+            let size = (x[0] as u64) << 56
+                | (x[1] as u64) << 48
+                | (x[2] as u64) << 40
+                | (x[3] as u64) << 32
+                | (x[4] as u64) << 24
+                | (x[5] as u64) << 16
+                | (x[6] as u64) << 8
+                | (x[7] as u64);
+
+            assert_eq!(size, input_len_bits as u64)
+        }
+    }
+
+    #[test]
     fn padded_message_can_be_parsed_into_blocks_of_words() {
         let message = apply_padding(&vec![0xFF; 10]);
         let blocks = into_blocks(&message);
@@ -63,9 +88,19 @@ mod tests {
         let hexadecimal = to_hex(decimal);
         assert_eq!(hexadecimal, "0F");
     }
+
+    #[test]
+    fn hash_method_returns_known_good_message_digest() {
+        let raw_message = "1";
+        print_hex_u8(&raw_message.as_bytes().to_owned().to_vec());
+        let message_in_bytes = raw_message.as_bytes().to_owned();
+        let message_digest = sha_1(&message_in_bytes);
+        println!("Message digest: {message_digest}");
+        assert_eq!(message_digest, "356A192B7913B04C54574D18C28D46E6395428AB");
+    }
 }
 
-pub fn sha_1(message: &Vec<u8>) {
+pub fn sha_1(message: &Vec<u8>) -> String {
     let mut h0: u32 = 0x67452301;
     let mut h1: u32 = 0xEFCDAB89;
     let mut h2: u32 = 0x98BADCFE;
@@ -73,25 +108,35 @@ pub fn sha_1(message: &Vec<u8>) {
     let mut h4: u32 = 0xC3D2E1F0;
 
     let message = apply_padding(message);
+    print_hex_u8(&message);
+
     let blocks = into_blocks(&message);
 
-    for mut words in blocks {
+    for words in blocks {
+        let mut expanded_words = vec![0u32; 80];
+        expanded_words.splice(0..16, words);
         for t in 16..80 {
-            words[t] = (words[t - 3] ^ words[t - 8] ^ words[t - 14] ^ words[t - 16]).rotate_left(1);
+            expanded_words[t] = (expanded_words[t - 3]
+                ^ expanded_words[t - 8]
+                ^ expanded_words[t - 14]
+                ^ expanded_words[t - 16])
+                .rotate_left(1);
         }
 
-        let mut a: u32 = h0.to_owned();
-        let mut b: u32 = h2.to_owned();
-        let mut c: u32 = h2.to_owned();
-        let mut d: u32 = h3.to_owned();
-        let mut e: u32 = h4.to_owned();
+        print_hex_u32(&expanded_words);
+
+        let mut a: u32 = h0;
+        let mut b: u32 = h1;
+        let mut c: u32 = h2;
+        let mut d: u32 = h3;
+        let mut e: u32 = h4;
 
         for t in 0..80 {
             let temp = a
                 .rotate_left(5)
                 .wrapping_add(operation(t, &b, &c, &d))
                 .wrapping_add(e)
-                .wrapping_add(words[t])
+                .wrapping_add(expanded_words[t])
                 .wrapping_add(constant(t));
             e = d;
             d = c;
@@ -106,6 +151,71 @@ pub fn sha_1(message: &Vec<u8>) {
         h3 = h3.wrapping_add(d);
         h4 = h4.wrapping_add(e);
     }
+    //     let mut message_digest = String::new();
+    //     for word in [h0, h1, h2, h3, h4] {
+    //         message_digest.push_str(&to_hex(word));
+    //     }
+
+    //     message_digest
+    let mut result: [u8; 20] = [0; 20];
+    let h_values = [h0, h1, h2, h3, h4];
+    let h_iter = h_values.iter().flat_map(|x| x.to_be_bytes());
+
+    for (ret, src) in result.iter_mut().zip(h_iter) {
+        *ret = src;
+    }
+
+    let mut string = String::new();
+    for res in result {
+        string.push_str(&to_hex_u8(res));
+    }
+    string
+}
+
+fn print_hex_u8(x: &Vec<u8>) {
+    let mut string = String::new();
+    for res in x {
+        string.push_str(&to_hex_u8(res.to_owned()));
+    }
+    println!("######");
+    println!("{string}");
+    println!("######");
+}
+fn print_hex_u32(x: &Vec<u32>) {
+    let mut string = String::new();
+    for res in x {
+        string.push_str(&to_hex(res.to_owned()));
+    }
+    println!("######");
+    println!("{string}");
+    println!("######");
+}
+
+fn to_hex_u8(int: u8) -> String {
+    let hex_chars = [
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+    ];
+    let mut input = int;
+    let mut hex_string = String::new();
+    if input < 16 {
+        let mut string = String::from(hex_chars[(input) as usize]);
+        string.insert(0, '0');
+        return string;
+    }
+    loop {
+        let rest = (input % 16) as usize;
+        input = input / 16;
+        hex_string.insert(0, hex_chars[rest]);
+        if input < 16 {
+            hex_string.insert(0, hex_chars[(input) as usize]);
+            break;
+        }
+    }
+    while hex_string.len() != 2 {
+        hex_string.insert(0, '0');
+    }
+
+    hex_string
 }
 
 fn to_hex(int: u32) -> String {
@@ -128,7 +238,7 @@ fn to_hex(int: u32) -> String {
             break;
         }
     }
-    if hex_string.len() == 1 {
+    while hex_string.len() != 8 {
         hex_string.insert(0, '0');
     }
 
@@ -136,7 +246,8 @@ fn to_hex(int: u32) -> String {
 }
 
 pub fn apply_padding(message: &Vec<u8>) -> Vec<u8> {
-    let original_length: u64 = message.len().try_into().expect("error");
+    let mut original_length_in_bits: u64 = message.len().try_into().expect("error");
+    original_length_in_bits = original_length_in_bits * 8;
     let mut buf = vec![];
 
     for byte in message {
@@ -152,8 +263,8 @@ pub fn apply_padding(message: &Vec<u8>) -> Vec<u8> {
     }
 
     // Push the end of the padding
-    let (low, high) = split_u64_to_u32(original_length);
-    for byte in [low.to_be_bytes(), high.to_be_bytes()].concat() {
+    let (low, high) = split_u64_to_u32(original_length_in_bits);
+    for byte in [high.to_be_bytes(), low.to_be_bytes()].concat() {
         buf.push(byte);
     }
 
@@ -180,7 +291,7 @@ pub fn into_blocks(message: &Vec<u8>) -> Vec<Vec<u32>> {
 
 pub fn operation(t: usize, b: &u32, c: &u32, d: &u32) -> u32 {
     match t {
-        0..=19 => (b & d) | ((!b) & d),
+        0..=19 => (b & c) | (!b & d),
         20..=39 => b ^ c ^ d,
         30..=59 => (b & c) | (b & d) | (c & d),
         60..=79 => b ^ c ^ d,
