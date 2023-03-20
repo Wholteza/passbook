@@ -63,40 +63,51 @@ mod tests {
     fn decimals_are_converted_to_hex() {
         let decimal: u32 = 255;
         let hexadecimal = to_hex(decimal);
-        assert_eq!(hexadecimal, "FF");
+        assert_eq!(hexadecimal, "000000FF");
 
         let decimal: u32 = 16;
         let hexadecimal = to_hex(decimal);
-        assert_eq!(hexadecimal, "10");
+        assert_eq!(hexadecimal, "00000010");
 
         let decimal: u32 = 128;
         let hexadecimal = to_hex(decimal);
-        assert_eq!(hexadecimal, "80");
+        assert_eq!(hexadecimal, "00000080");
     }
 
     #[test]
     fn hexadecimals_less_than_16_are_padded_with_zero() {
         let decimal: u32 = 0;
         let hexadecimal = to_hex(decimal);
-        assert_eq!(hexadecimal, "00");
+        assert_eq!(hexadecimal, "00000000");
 
         let decimal: u32 = 8;
         let hexadecimal = to_hex(decimal);
-        assert_eq!(hexadecimal, "08");
+        assert_eq!(hexadecimal, "00000008");
 
         let decimal: u32 = 15;
         let hexadecimal = to_hex(decimal);
-        assert_eq!(hexadecimal, "0F");
+        assert_eq!(hexadecimal, "0000000F");
     }
 
     #[test]
     fn hash_method_returns_known_good_message_digest() {
-        let raw_message = "1";
-        print_hex_u8(&raw_message.as_bytes().to_owned().to_vec());
-        let message_in_bytes = raw_message.as_bytes().to_owned();
-        let message_digest = sha_1(&message_in_bytes);
-        println!("Message digest: {message_digest}");
-        assert_eq!(message_digest, "356A192B7913B04C54574D18C28D46E6395428AB");
+        const TEST_DATA: [(&str, &str); 3] = [
+            ("1", "356A192B7913B04C54574D18C28D46E6395428AB"),
+            ("hello, world!", "1f09d30c707d53f3d16c530dd73d70a6ce7596a9"),
+            (
+                r#"SOfgb,2P;/"LGzwva6#%qpzlr_@44#I+O7$9a"8M\1w-Y!2j?e713sk'jPs%H}Ki9"#,
+                "c401459ae7b932564aa68d0577f5f88ffe9ea47a",
+            ),
+        ];
+        for data in TEST_DATA {
+            let (raw_message, known_good_digest) = data;
+            let message_in_bytes = raw_message.as_bytes().to_owned();
+            let generated_digest = sha_1(&message_in_bytes);
+            assert_eq!(
+                generated_digest.to_ascii_uppercase(),
+                known_good_digest.to_ascii_uppercase()
+            );
+        }
     }
 }
 
@@ -108,7 +119,6 @@ pub fn sha_1(message: &Vec<u8>) -> String {
     let mut h4: u32 = 0xC3D2E1F0;
 
     let message = apply_padding(message);
-    print_hex_u8(&message);
 
     let blocks = into_blocks(&message);
 
@@ -122,8 +132,6 @@ pub fn sha_1(message: &Vec<u8>) -> String {
                 ^ expanded_words[t - 16])
                 .rotate_left(1);
         }
-
-        print_hex_u32(&expanded_words);
 
         let mut a: u32 = h0;
         let mut b: u32 = h1;
@@ -151,71 +159,12 @@ pub fn sha_1(message: &Vec<u8>) -> String {
         h3 = h3.wrapping_add(d);
         h4 = h4.wrapping_add(e);
     }
-    //     let mut message_digest = String::new();
-    //     for word in [h0, h1, h2, h3, h4] {
-    //         message_digest.push_str(&to_hex(word));
-    //     }
-
-    //     message_digest
-    let mut result: [u8; 20] = [0; 20];
-    let h_values = [h0, h1, h2, h3, h4];
-    let h_iter = h_values.iter().flat_map(|x| x.to_be_bytes());
-
-    for (ret, src) in result.iter_mut().zip(h_iter) {
-        *ret = src;
+    let mut message_digest = String::new();
+    for word in [h0, h1, h2, h3, h4] {
+        message_digest.push_str(&to_hex(word));
     }
 
-    let mut string = String::new();
-    for res in result {
-        string.push_str(&to_hex_u8(res));
-    }
-    string
-}
-
-fn print_hex_u8(x: &Vec<u8>) {
-    let mut string = String::new();
-    for res in x {
-        string.push_str(&to_hex_u8(res.to_owned()));
-    }
-    println!("######");
-    println!("{string}");
-    println!("######");
-}
-fn print_hex_u32(x: &Vec<u32>) {
-    let mut string = String::new();
-    for res in x {
-        string.push_str(&to_hex(res.to_owned()));
-    }
-    println!("######");
-    println!("{string}");
-    println!("######");
-}
-
-fn to_hex_u8(int: u8) -> String {
-    let hex_chars = [
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
-    ];
-    let mut input = int;
-    let mut hex_string = String::new();
-    if input < 16 {
-        let mut string = String::from(hex_chars[(input) as usize]);
-        string.insert(0, '0');
-        return string;
-    }
-    loop {
-        let rest = (input % 16) as usize;
-        input = input / 16;
-        hex_string.insert(0, hex_chars[rest]);
-        if input < 16 {
-            hex_string.insert(0, hex_chars[(input) as usize]);
-            break;
-        }
-    }
-    while hex_string.len() != 2 {
-        hex_string.insert(0, '0');
-    }
-
-    hex_string
+    message_digest
 }
 
 fn to_hex(int: u32) -> String {
@@ -226,7 +175,9 @@ fn to_hex(int: u32) -> String {
     let mut hex_string = String::new();
     if input < 16 {
         let mut string = String::from(hex_chars[(input) as usize]);
-        string.insert(0, '0');
+        while string.len() != 8 {
+            string.insert(0, '0');
+        }
         return string;
     }
     loop {
