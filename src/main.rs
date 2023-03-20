@@ -8,6 +8,7 @@ mod environment;
 mod gpg;
 mod password;
 mod sha1;
+mod totp;
 
 fn main() {
     let environment_variables =
