@@ -4,6 +4,16 @@ pass like password manager
 
 # Getting started
 
+1. Install rust using the official getting started on rust-lang.org
+2. cargo install
+3. Set up gpg paths
+
+- For most linux distributions you can put this in your .bashrc file:
+  ```bash
+  export PASSBOOK_GPG_PATH="/usr/bin/gpg"
+  export PASSBOOK_ROOT_DIRECTORY="/home/username/.password-store"
+  ```
+
 ## Requirements Ubuntu
 
 - `sudo apt install build-essential libgpgme-dev xorg-dev`
