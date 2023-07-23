@@ -16,7 +16,7 @@ pass like password manager
 
 ## Requirements Ubuntu
 
-- `sudo apt install build-essential libgpgme-dev xorg-dev`
+- `sudo apt install build-essential libgpgme-dev xorg-dev libgtk-4-dev`
 
 ## Requirements Windows
 

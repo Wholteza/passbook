@@ -9,6 +9,10 @@ mod gpg;
 mod password;
 
 fn main() {
+    let app = RelmApp::new("passbook.ui");
+    app.run::<App>(0);
+
+    /// arst
     let environment_variables =
         get_variables().expect("Could not get all required configuration parameters");
 

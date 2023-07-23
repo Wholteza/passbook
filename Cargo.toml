@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 arboard = "3.2.0"
+relm4 = "0.6.0"
+relm4-components = "0.6.0"
+relm4-icons = { version = "0.6.0", features = ["plus"] }
