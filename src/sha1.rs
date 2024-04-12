@@ -1,9 +1,6 @@
 // Implemented following rfc3174
 // https://datatracker.ietf.org/doc/html/rfc3174#section-6.1
 
-use std::{array, io::Read, string};
-
-// Method 1
 const PADDING_MIN_LENGTH_IN_BYTES: usize = 9;
 const BLOCK_SIZE_IN_BYTES: usize = 64;
 const PADDING_END_SIZE_IN_BYTES: usize = 8;
