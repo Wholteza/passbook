@@ -7,6 +7,8 @@ use crate::password::{get_password_files, into_password};
 mod environment;
 mod gpg;
 mod password;
+mod sha1;
+mod totp;
 
 fn main() {
     let environment_variables =
@@ -42,7 +44,12 @@ fn main() {
 
     // copy_to_clipboard(&password.password);
 
-    println!("{}", &password.password);
+    println!(
+        "{}\n{}\n{}",
+        password.password,
+        password.generate_totp().unwrap(),
+        password.raw_totp
+    );
 }
 
 // fn copy_to_clipboard(text: &str) {

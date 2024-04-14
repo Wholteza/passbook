@@ -1,10 +1,14 @@
 use std::io;
 use std::path::Path;
 
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     fs::{self, DirEntry},
     io::Error,
 };
+
+use otpauth::TOTP;
+use regex::Regex;
 
 use crate::{environment, gpg};
 
@@ -20,6 +24,33 @@ pub struct Password {
     pub password: String,
     pub raw_totp: String,
     pub rest: String,
+}
+
+impl Password {
+    pub fn generate_totp(&self) -> Option<String> {
+        let mut secret = String::new();
+
+        let rx = Regex::new("secret=(.*)$").expect("Could not create regex");
+        if let Some(mat) = rx.find(&self.raw_totp) {
+            secret.push_str(mat.as_str())
+        }
+
+        let rx = Regex::new("secret=(.*)&").expect("Could not create regex");
+        if let Some(mat) = rx.find(&self.raw_totp) {
+            secret.push_str(mat.as_str())
+        }
+        println!("{secret}");
+        let auth = TOTP::new(secret);
+        let totp = auth.generate(
+            30,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("cannot get time")
+                .as_secs(),
+        );
+
+        return Some(totp.to_string());
+    }
 }
 
 pub fn into_password(pass: &PasswordFile) -> io::Result<Password> {
