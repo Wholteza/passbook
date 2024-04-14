@@ -1,5 +1,9 @@
 use std::io::stdin;
 use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
+
+use arboard::Clipboard;
 
 use crate::environment::get_variables;
 use crate::password::{get_password_files, into_password};
@@ -48,7 +52,7 @@ fn main() {
         }
     };
 
-    // copy_to_clipboard(&password.password);
+    copy_to_clipboard(&password.password);
 
     println!(
         "{}\n{}\n{}",
@@ -58,10 +62,9 @@ fn main() {
     );
 }
 
-// fn copy_to_clipboard(text: &str) {
-//     let mut clipboard = Clipboard::new().expect("err");
-//     clipboard.set_text(text).unwrap();
-//     // Workaround for text not being sent to clipboard on kubuntu 22.04
-//     sleep(Duration::from_millis(10));
-//     println!("gpg output: {}", b)
-// }
+fn copy_to_clipboard(text: &str) {
+    let mut clipboard = Clipboard::new().expect("err");
+    clipboard.set_text(text).unwrap();
+    // Workaround for text not being sent to clipboard on kubuntu 22.04
+    sleep(Duration::from_millis(10));
+}
