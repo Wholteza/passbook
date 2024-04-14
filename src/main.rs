@@ -7,12 +7,18 @@ use crate::password::{get_password_files, into_password};
 mod environment;
 mod gpg;
 mod password;
-mod sha1;
+// Not including sha1 until used to avoid warnings
+// mod sha1;
 mod totp;
 
 fn main() {
-    let environment_variables =
-        get_variables().expect("Could not get all required configuration parameters");
+    let environment_variables = match get_variables() {
+        Ok(value) => value,
+        Err(_) => {
+            println!("Unable to read environment variables");
+            exit(1)
+        }
+    };
 
     let mut password_files = vec![];
     get_password_files(&environment_variables.root_directory, &mut password_files)

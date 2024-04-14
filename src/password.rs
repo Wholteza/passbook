@@ -95,27 +95,49 @@ pub fn into_password(pass: &PasswordFile) -> io::Result<Password> {
 }
 
 fn into_password_file(entry: &DirEntry) -> Result<PasswordFile, Error> {
-    let environment_variables =
-        environment::get_variables().expect("Could not read environment variables");
-
-    let name = match entry.file_name().to_str() {
-        Some(st) => st.into(),
-        None => String::new(),
+    let environment_variables = match environment::get_variables() {
+        Ok(value) => value,
+        Err(_) => {
+            return Err(Error::new(
+                io::ErrorKind::InvalidInput,
+                "Unable to read environment variables",
+            ));
+        }
     };
 
-    let absolute_path = match entry.path().to_str() {
-        Some(st) => st.into(),
-        None => String::new(),
+    let file_name: String = match entry.file_name().to_str() {
+        Some(file_name) => file_name.into(),
+        None => {
+            return Err(Error::new(
+                io::ErrorKind::InvalidInput,
+                "Could not convert file name into string",
+            ))
+        }
+    };
+
+    let absolute_path: String = match entry.path().to_str() {
+        Some(absolute_path) => absolute_path.into(),
+        None => {
+            return Err(Error::new(
+                io::ErrorKind::InvalidInput,
+                "Could not convert absolute path into string",
+            ))
+        }
     };
 
     let relative_path =
         match absolute_path.get((&environment_variables.root_directory).len().into()..) {
             Some(path) => String::from(path),
-            None => String::new(),
+            None => {
+                return Err(Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Could not extract relative path from absolute path",
+                ))
+            }
         };
 
     let password = PasswordFile {
-        name,
+        name: file_name,
         absolute_path,
         relative_path,
     };
@@ -124,37 +146,53 @@ fn into_password_file(entry: &DirEntry) -> Result<PasswordFile, Error> {
 }
 
 fn extract_passwords_files(dir: &Path, passwords: &mut Vec<PasswordFile>) -> io::Result<()> {
-    if dir.is_dir() {
-        let name = match dir.file_name() {
-            Some(file_name) => match file_name.to_str() {
-                Some(name) => name,
-                None => "",
-            },
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    let directory_name: &str = match dir.file_name() {
+        Some(directory_name) => match directory_name.to_str() {
+            Some(directory_name) => directory_name,
             None => "",
-        };
+        },
+        None => "",
+    };
 
-        if name.contains(".git") {
-            return Ok(());
-        }
+    let directory_should_be_ignored = directory_name.is_empty() || directory_name.contains(".git");
 
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                extract_passwords_files(&path, passwords)?;
-            } else {
-                let name = match path.file_name() {
-                    Some(os_string_name) => match os_string_name.to_str() {
-                        Some(name) => name,
-                        None => "",
-                    },
+    if directory_should_be_ignored {
+        return Ok(());
+    }
+
+    for directory_entry in fs::read_dir(dir)? {
+        let directory_entry = directory_entry?;
+        let path = directory_entry.path();
+        if path.is_dir() {
+            extract_passwords_files(&path, passwords)?;
+        } else {
+            let file_name = match path.file_name() {
+                Some(file_name) => match file_name.to_str() {
+                    Some(file_name) => file_name,
                     None => "",
-                };
-                if !name.contains(".gpg-id") {
-                    passwords
-                        .extend([into_password_file(&entry).expect("Failed to parse password")]);
-                }
+                },
+                None => "",
+            };
+
+            if file_name.contains(".gpg-id") {
+                continue;
             }
+
+            let password_file = match into_password_file(&directory_entry) {
+                Ok(password_file) => password_file,
+                Err(_) => {
+                    return Err(Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Could not convert file into password",
+                    ))
+                }
+            };
+
+            passwords.extend([password_file]);
         }
     }
     Ok(())
