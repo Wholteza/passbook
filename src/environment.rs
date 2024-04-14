@@ -7,11 +7,25 @@ pub struct Variables {
     pub gpg_path: String,
 }
 pub fn get_variables() -> Result<Variables, Error> {
-    // TODO: fix this error handling
-    let root_directory = get_root_directory().expect("error");
+    let root_directory = match get_root_directory() {
+        Ok(value) => value,
+        Err(_) => {
+            return Err(Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Unable to find root directory",
+            ));
+        }
+    };
 
-    // TODO: Throw error here and handle on top level to let the user know what went wrong
-    let gpg_path = env::var("PASSBOOK_GPG_PATH").expect("PASSBOOK_GPG_PATH not specified");
+    let gpg_path = match env::var("PASSBOOK_GPG_PATH") {
+        Ok(value) => value,
+        Err(_) => {
+            return Err(Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Unable to find gpg path",
+            ));
+        }
+    };
 
     return Ok(Variables {
         root_directory,
@@ -20,7 +34,6 @@ pub fn get_variables() -> Result<Variables, Error> {
 }
 
 fn get_root_directory() -> Result<String, Error> {
-    // TODO: Fix this error handling
     let root_directory = match env::var("PASSBOOK_ROOT_DIRECTORY") {
         Ok(value) => {
             if cfg!(target_os = "linux") {
